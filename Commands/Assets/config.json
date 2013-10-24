@@ -1,0 +1,78 @@
+{
+	"rbs_dev:create-command": {
+		"description": "Create an empty console command",
+		"dev": true,
+		"arguments":{
+			"package": {
+				"description": "name of the package (vendor/module or change)",
+				"required": true,
+				"default": null
+			},
+			"cmdname": {
+				"description": "name of the command (e.g. my-cmd)",
+				"required": true,
+				"default": null
+			}
+		}
+	},
+	"rbs_dev:initialize-model": {
+		"description": "Initialize an new XML model file",
+		"dev": true,
+		"arguments":{
+			"vendor": {
+				"description": "vendor of the target module",
+				"required": true,
+				"default": null
+			},
+			"module": {
+				"description": "name of the target module",
+				"required": true,
+				"default": null
+			},
+			"name": {
+				"description": "short name of the model",
+				"required": true,
+				"default": null
+			}
+		}
+	},
+	"rbs_dev:initialize-plugin": {
+		"description": "Initialize an new empty plugin skeleton",
+		"dev": true,
+		"options":{
+			"package": {
+				"description": "package of plugin",
+				"default": null,
+				"shortcut": "p"
+			}
+		},
+		"arguments":{
+			"type": {
+				"description": "type of plugin",
+				"required": true,
+				"default": null
+			},
+			"vendor": {
+				"description": "vendor of the plugin",
+				"required": true,
+				"default": null
+			},
+			"name": {
+				"description": "short name of the plugin",
+				"required": true,
+				"default": null
+			}
+		}
+	},
+	"rbs_janitor:update-property-keys":{
+		"description": "Replace properly label i18n keys by calls to propertyKey in twig templates",
+		"dev": true,
+		"arguments":{
+			"path": {
+				"description": "path",
+				"required": false,
+				"default": null
+			}
+		}
+	}
+}

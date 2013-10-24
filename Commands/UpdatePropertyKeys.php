@@ -57,8 +57,12 @@ class UpdatePropertyKeys
 		{
 			/** @var $file \SplFileInfo */
 			$content = $file->getContents();
-			$content = str_ireplace($searchKeys, $replaceKeys, $content);
-			file_put_contents($file->getPathname(), $content);
+			$count = 0;
+			$content = str_ireplace($searchKeys, $replaceKeys, $content, $count);
+			if ($count)
+			{
+				file_put_contents($file->getPathname(), $content);
+			}
 		}
 
 		$event->addInfoMessage('Done.');

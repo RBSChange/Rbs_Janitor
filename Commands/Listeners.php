@@ -30,6 +30,15 @@ class Listeners implements ListenerAggregateInterface
 		};
 		$events->attach('config', $callback);
 
+		$callback = function (\Change\Commands\Events\Event $event)
+		{
+			/** @var $app \Change\Application\Console\ConsoleApplication*/
+			$app = $event->getTarget();
+			$app->add(new ScanLocales());
+
+		};
+		$events->attach('command', $callback);
+
 		$callback = function ($event)
 		{
 			$cmd = new \Rbs\Janitor\Commands\UpdatePropertyKeys();

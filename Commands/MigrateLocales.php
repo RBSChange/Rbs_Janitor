@@ -59,9 +59,9 @@ class MigrateLocales extends Command
 		$em = new EventManagerFactory($app);
 		$as = new ApplicationServices($app, $em);
 		$plugin = $as->getPluginManager()->getPlugin($type, $vendor, $name);
-
+		/*
 		$substitutions = [];
-		$substitutionsFilePath = $plugin->getAbsolutePath($app->getWorkspace()) . DIRECTORY_SEPARATOR . 'Assets' . DIRECTORY_SEPARATOR . 'I18n' . DIRECTORY_SEPARATOR . 'substitutions.json';
+		$substitutionsFilePath = $plugin->getAbsolutePath($app->getWorkspace()) . DIRECTORY_SEPARATOR . 'Assets' . DIRECTORY_SEPARATOR . 'I18n' . DIRECTORY_SEPARATOR . 'substitutions.tmp';
 		if (file_exists($substitutionsFilePath))
 		{
 			$substitutions = json_decode(file_get_contents($substitutionsFilePath), true);
@@ -88,7 +88,6 @@ class MigrateLocales extends Command
 		foreach ($finder as $file)
 		{
 			$packageName = strtolower(implode('.', [($type === 'module') ?  'm' : 't', $vendor, $name, substr($file->getFilename(), 0 , -5)]));
-			/** @var $file \SplFileInfo */
 			$destinationPackages[$packageName] = json_decode($file->getContents(), true);
 		}
 
@@ -101,7 +100,7 @@ class MigrateLocales extends Command
 			array_shift($oldFilePathParts);
 
 			$key = array_pop($oldFilePathParts);
-			$basePath = $plugin->getAbsolutePath($app->getWorkspace()) . DIRECTORY_SEPARATOR . 'I18n' . DIRECTORY_SEPARATOR . 'Assets';
+			$basePath = $plugin->getAbsolutePath($app->getWorkspace()) . DIRECTORY_SEPARATOR . 'I18n' . DIRECTORY_SEPARATOR . 'Assets' . DIRECTORY_SEPARATOR;
 			$xmlPath = $basePath . implode(DIRECTORY_SEPARATOR,  $oldFilePathParts) . DIRECTORY_SEPARATOR . 'en_US.xml';
 			if (file_exists($xmlPath))
 			{
@@ -141,14 +140,18 @@ class MigrateLocales extends Command
 		$finder->files()->name('*.php')->name('*.js')->name('*.json')->name('*.twig');
 		foreach ($finder as $file)
 		{
-			$content = file_get_contents($file);
+			$content = $file->getContents();
 			$content = str_replace(array_keys($substitutions), array_values($substitutions), $content, $count);
 			if ($count)
 			{
-				file_put_contents($fileName, $content);
+				file_put_contents($file->getPathname(), $content);
 			}
-		}
+		}*/
 
+		$json = file_get_contents($plugin->getAbsolutePath($app->getWorkspace()) . DIRECTORY_SEPARATOR . 'plugin.json');
+		$data = json_decode($json, true);
+		$data['defaultLCID'] = 'fr_FR';
+		\Change\Stdlib\File::write($plugin->getAbsolutePath($app->getWorkspace()) . DIRECTORY_SEPARATOR . 'plugin.json', Json::prettyPrint(json_encode($data, JSON_UNESCAPED_UNICODE)));
 
 	}
 
@@ -198,10 +201,17 @@ class MigrateLocales extends Command
 			}
 
 			$substitutions = [];
-			$substitutionsFilePath = $plugin->getAbsolutePath($app->getWorkspace()) . DIRECTORY_SEPARATOR . 'Assets' . DIRECTORY_SEPARATOR . 'I18n' . DIRECTORY_SEPARATOR . 'substitutions.json';
+			$substitutionsFilePath = $plugin->getAbsolutePath($app->getWorkspace()) . DIRECTORY_SEPARATOR . 'Assets' . DIRECTORY_SEPARATOR . 'I18n' . DIRECTORY_SEPARATOR . 'substitutions.tmp';
 			if (file_exists($substitutionsFilePath))
 			{
 				$substitutions = json_decode(file_get_contents($substitutionsFilePath), true);
+			}
+
+			$htmlKeys = [];
+			$htmlKeysFilePath = $plugin->getAbsolutePath($app->getWorkspace()) . DIRECTORY_SEPARATOR . 'Assets' . DIRECTORY_SEPARATOR . 'I18n' . DIRECTORY_SEPARATOR . 'html.tmp';
+			if (file_exists($htmlKeysFilePath))
+			{
+				$htmlKeys = json_decode(file_get_contents($htmlKeysFilePath), true);
 			}
 
 			$remainingLocales = [];
@@ -218,6 +228,7 @@ class MigrateLocales extends Command
 				foreach ($content as $key => $data)
 				{
 					$moveTo = null;
+					$suffix = null;
 					if (strpos($key, '__') === false)
 					{
 						if (isset($data['__moveTo']))
@@ -232,6 +243,12 @@ class MigrateLocales extends Command
 
 					if ($moveTo)
 					{
+						$moveToParts = explode('.', $moveTo);
+						if (count($moveToParts) == 5)
+						{
+							$suffix = array_pop($moveToParts);
+							$moveTo = implode('.', $moveToParts);
+						}
 						if (!preg_match(PreparedKey::KEY_REGEXP, $moveTo . '.test_key'))
 						{
 							$data['__error'] = 'Invalid destination package';
@@ -239,7 +256,11 @@ class MigrateLocales extends Command
 						}
 						else
 						{
-							if (isset($destinationPackages[$moveTo][$key]))
+							if ($suffix)
+							{
+								$key = $suffix . '_' . $key;
+							}
+							if (isset($destinationPackages[$moveTo][$key]) && !isset($data['__force']))
 							{
 								$data['__error'] = 'Key already exists in destination package';
 								$remainder[$fileName][$key] = $data;
@@ -247,10 +268,13 @@ class MigrateLocales extends Command
 							else if (isset($data['__originalKey']))
 							{
 								$substitutions[$data['__originalKey']] = $moveTo . '.' . $key;
-								unset($data['__originalKey']);
 								if (isset($data['__moveTo'])) unset($data['__moveTo']);
 								if (isset($data['__error'])) unset($data['__error']);
-
+								if (isset($data['__format'])) {
+									$htmlKeys[] = $moveTo . '.' . $key;
+									unset($data['__format']);
+								}
+								unset($data['__originalKey']);
 								$destinationPackages[$moveTo][$key] = $data;
 							}
 						}
@@ -295,7 +319,11 @@ class MigrateLocales extends Command
 		}
 
 		file_put_contents($substitutionsFilePath, Json::prettyPrint(json_encode($substitutions, JSON_UNESCAPED_UNICODE)));
-
+		$htmlKeys = array_unique($htmlKeys);
+		if (count($htmlKeys))
+		{
+			file_put_contents($htmlKeysFilePath, Json::prettyPrint(json_encode($htmlKeys, JSON_UNESCAPED_UNICODE)));
+		}
 	}
 
 
@@ -343,14 +371,19 @@ class MigrateLocales extends Command
 					$key = str_replace('-', '_', $keyElement->getAttribute('id'));
 					$this->locales[$LCID][$fileName][$key] = [
 						'message' => $value,
-						'__originalKey' => implode('.', $pathParts) . '.' . $keyElement->getAttribute('id')
+						'__originalKey' => implode('.', $pathParts) . '.' . $keyElement->getAttribute('id'),
 					];
+					$format =  $keyElement->getAttribute('format');
+					if (strtolower($format) == 'html' && strpos($value, '<') !== false)
+					{
+						$this->locales[$LCID][$fileName][$key]['__format'] = 'html';
+					}
+
 				}
 			}
 			foreach ($this->locales as $locale => $files)
 			{
 				$baseI18nPath = $plugin->getAbsolutePath($app->getWorkspace()) . DIRECTORY_SEPARATOR . 'Assets' . DIRECTORY_SEPARATOR . 'I18n' . DIRECTORY_SEPARATOR . 'Tmp';
-				@mkdir($baseI18nPath, 0755, true);
 				foreach ($files as $file => $keys)
 				{
 					\Change\Stdlib\File::write($baseI18nPath . DIRECTORY_SEPARATOR . $file, Json::prettyPrint(json_encode($keys, JSON_UNESCAPED_UNICODE)));

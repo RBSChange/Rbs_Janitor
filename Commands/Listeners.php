@@ -35,6 +35,8 @@ class Listeners implements ListenerAggregateInterface
 			/** @var $app \Change\Application\Console\ConsoleApplication*/
 			$app = $event->getTarget();
 			$app->add(new ScanLocales());
+			$app->add(new MigrateLocales());
+			$app->add(new ConvertXMLI18nFile());
 
 		};
 		$events->attach('command', $callback);

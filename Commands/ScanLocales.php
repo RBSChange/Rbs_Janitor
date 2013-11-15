@@ -1,7 +1,8 @@
 <?php
 namespace Rbs\Janitor\Commands;
 
-use Change\Application\ApplicationServices;
+use Change\Events\EventManagerFactory;
+use Change\Services\ApplicationServices;
 use Change\Commands\Events\Event;
 use Change\Plugins\Plugin;
 use Symfony\Component\Console\Command\Command;
@@ -47,7 +48,7 @@ class ScanLocales extends Command
 		$finder->in($path);
 		$finder->depth('> 0');
 		$finder->exclude(array('tmp', 'App', 'Compilation', 'Libraries', 'ChangeTests', $application->getConfiguration('Change/Install/webBaseDirectory')));
-		$finder->files()/*->name('*.php')*/->name('*.js')/*->name('*.json')->name('*.twig')*/;
+		$finder->files()->name('*.php')->name('*.js')->name('*.json')->name('*.twig');
 		$usedExplicitely = array();
 		foreach ($finder as $file)
 		{
@@ -68,7 +69,7 @@ class ScanLocales extends Command
 			$usedExplicitely[$key] = array_unique($files);;
 		}
 
-		$as = new ApplicationServices($application);
+		$as = new ApplicationServices($application, new EventManagerFactory($application));
 
 		$defined = array();
 		foreach ($as->getPluginManager()->getPlugins() as $plugin)
@@ -121,16 +122,14 @@ class ScanLocales extends Command
 			foreach ($as->getI18nManager()->getDefinitionKeys('fr_FR', $pathParts) as $defKey)
 			{
 				$defined[implode('.', $pathParts) . '.' . $defKey->getId()] = true;
-
 			}
 		}
 
-		$ds = new \Change\Documents\DocumentServices($as);
 
 		$implicitKeys = [];
-		foreach ($ds->getModelManager()->getModelsNames() as $modelName)
+		foreach ($as->getModelManager()->getModelsNames() as $modelName)
 		{
-			$model = $ds->getModelManager()->getModelByName($modelName);
+			$model = $as->getModelManager()->getModelByName($modelName);
 			$implicitKeys[strtolower(implode('.', ['m', $model->getVendorName(), $model->getShortModuleName(), 'documents', $model->getShortName()]))] = true;
 			foreach ($model->getPropertyNames() as $pName)
 			{

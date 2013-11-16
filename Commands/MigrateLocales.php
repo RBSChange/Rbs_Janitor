@@ -59,7 +59,6 @@ class MigrateLocales extends Command
 		$em = new EventManagerFactory($app);
 		$as = new ApplicationServices($app, $em);
 		$plugin = $as->getPluginManager()->getPlugin($type, $vendor, $name);
-		/*
 		$substitutions = [];
 		$substitutionsFilePath = $plugin->getAbsolutePath($app->getWorkspace()) . DIRECTORY_SEPARATOR . 'Assets' . DIRECTORY_SEPARATOR . 'I18n' . DIRECTORY_SEPARATOR . 'substitutions.tmp';
 		if (file_exists($substitutionsFilePath))
@@ -146,7 +145,7 @@ class MigrateLocales extends Command
 			{
 				file_put_contents($file->getPathname(), $content);
 			}
-		}*/
+		}
 
 		$json = file_get_contents($plugin->getAbsolutePath($app->getWorkspace()) . DIRECTORY_SEPARATOR . 'plugin.json');
 		$data = json_decode($json, true);

@@ -137,10 +137,21 @@ class MigrateLocales extends Command
 		$finder->depth('> 0');
 		$finder->exclude(array('tmp', 'App', 'Compilation', 'Libraries', 'ChangeTests', $app->getConfiguration('Change/Install/webBaseDirectory')));
 		$finder->files()->name('*.php')->name('*.js')->name('*.json')->name('*.twig');
+
+		$searchKeys = [];
+		$replaceKeys = [];
+		foreach ($substitutions as $key => $val)
+		{
+			$searchKeys[] = "'" . $key . "'";
+			$searchKeys[] = '"' . $key . '"';
+			$replaceKeys[] = "'" . $val . "'";
+			$replaceKeys[] = '"' . $val . '"';
+		}
+
 		foreach ($finder as $file)
 		{
 			$content = $file->getContents();
-			$content = str_replace(array_keys($substitutions), array_values($substitutions), $content, $count);
+			$content = str_replace($searchKeys, $replaceKeys, $content, $count);
 			if ($count)
 			{
 				file_put_contents($file->getPathname(), $content);
@@ -269,6 +280,7 @@ class MigrateLocales extends Command
 								$substitutions[$data['__originalKey']] = $moveTo . '.' . $key;
 								if (isset($data['__moveTo'])) unset($data['__moveTo']);
 								if (isset($data['__error'])) unset($data['__error']);
+								if (isset($data['__force'])) unset($data['__force']);
 								if (isset($data['__format'])) {
 									$htmlKeys[] = $moveTo . '.' . $key;
 									unset($data['__format']);

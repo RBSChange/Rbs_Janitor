@@ -37,6 +37,7 @@ class Listeners implements ListenerAggregateInterface
 			$app->add(new ScanLocales());
 			$app->add(new MigrateLocales());
 			$app->add(new ConvertXMLI18nFile());
+			$app->add(new GenerateCrowdinConfig());
 
 		};
 		$events->attach('command', $callback);

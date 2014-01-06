@@ -11,6 +11,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Finder\Finder;
+use Zend\Stdlib\Glob;
 
 /**
  * @name \Rbs\Janitor\Commands\FindUnusedLocales
@@ -54,7 +55,7 @@ class ScanLocales extends Command
 		{
 			/** @var $file \SplFileInfo */
 			$content = $file->getContents();
-			preg_match_all('/(?<=[\'"])(?:c|m|t)\.[a-z0-9]+(?:\.[a-z0-9-]+)+/i', $content, $keys);
+			preg_match_all('/(?<=[\'"])(?:c|m|t)\.[a-z0-9]+(?:\.[a-z0-9_@]+)+/i', $content, $keys);
 			foreach ($keys[0] as $match)
 			{
 				$parts = explode('.', strtolower($match));
@@ -66,7 +67,7 @@ class ScanLocales extends Command
 		}
 		foreach ($usedExplicitely as $key => $files)
 		{
-			$usedExplicitely[$key] = array_unique($files);;
+			$usedExplicitely[$key] = array_unique($files);
 		}
 
 		$as = new ApplicationServices($application, new EventManagerFactory($application));
@@ -74,76 +75,72 @@ class ScanLocales extends Command
 		$defined = array();
 		foreach ($as->getPluginManager()->getPlugins() as $plugin)
 		{
-			$absPath = $plugin->getAbsolutePath($application->getWorkspace());
-			$finder = new Finder();
-			$finder->ignoreVCS(true)->ignoreDotFiles(true)->ignoreUnreadableDirs(true);
-			$finder->in($absPath);
-			$finder->files()->name('fr_FR.xml');
-			foreach ($finder as $file)
+			$basePackageName = implode('.', [$plugin->isModule() ? 'm' : 't', strtolower($plugin->getVendor()), strtolower($plugin->getShortName())]);
+			$localeFilePattern = implode(DIRECTORY_SEPARATOR, [$plugin->getAssetsPath(), 'I18n', 'fr_FR', '*.json']);
+			foreach (Glob::glob($localeFilePattern, Glob::GLOB_NOESCAPE + Glob::GLOB_NOSORT) as $path)
 			{
-				$pathParts = [];
-				/** @var $file \SplFileInfo */
-				$relativePath = trim(str_replace($absPath .'/I18n/Assets', '', $file->getPath()), '/');
-				if ($plugin->getType() === Plugin::TYPE_MODULE)
+				$fInfo = new \SplFileInfo($path);
+				$fileName = substr($fInfo->getFilename(), 0, -5);
+				$packageName = $basePackageName . '.' . $fileName;
+				try
 				{
-					$pathParts[] = 'm';
+					$decoded = \Zend\Json\Json::decode(file_get_contents($path), \Zend\Json\Json::TYPE_ARRAY);
 				}
-				else
+				catch (\Zend\Json\Exception\RuntimeException $e)
 				{
-					$pathParts[] = 't';
+					$this->getLogging()->error('Decoding failed ' . $filePath);
+					$decoded = null;
 				}
-				$pathParts[] = strtolower($plugin->getVendor());
-				$pathParts[] = strtolower($plugin->getShortName());
-				if (!empty($relativePath))
+				if (is_array($decoded))
 				{
-					$pathParts = array_merge($pathParts, explode(DIRECTORY_SEPARATOR, $relativePath));
-				}
-				foreach ($as->getI18nManager()->getDefinitionKeys('fr_FR', $pathParts) as $defKey)
-				{
-					$defined[implode('.', $pathParts) . '.' . $defKey->getId()] = true;
+					foreach ($decoded as $key => $data)
+					{
+						$defined[strtolower($packageName . '.'  . $key)] = $path;
+					}
 				}
 			}
 		}
 
-		$absPath = $application->getWorkspace()->changePath();
-		$finder = new Finder();
-		$finder->ignoreVCS(true)->ignoreDotFiles(true)->ignoreUnreadableDirs(true);
-		$finder->in($absPath);
-		$finder->files()->name('fr_FR.xml');
-		foreach ($finder as $file)
+
+		$localeFilePattern = $application->getWorkspace()->changePath('Assets', 'I18n', 'fr_FR', '*.json');
+		foreach (Glob::glob($localeFilePattern, Glob::GLOB_NOESCAPE + Glob::GLOB_NOSORT) as $filePath)
 		{
-			$pathParts = ['c'];
-			/** @var $file \SplFileInfo */
-			$relativePath = trim(str_replace($absPath .'/I18n/Assets', '', $file->getPath()), '/');
-			if (!empty($relativePath))
+			$fInfo = new \SplFileInfo($filePath);
+			$packageName = 'c.' . substr($fInfo->getFilename(), 0, -5);
+			try
 			{
-				$pathParts = array_merge($pathParts, explode(DIRECTORY_SEPARATOR, $relativePath));
+				$decoded = \Zend\Json\Json::decode(file_get_contents($filePath), \Zend\Json\Json::TYPE_ARRAY);
 			}
-			foreach ($as->getI18nManager()->getDefinitionKeys('fr_FR', $pathParts) as $defKey)
+			catch (\Zend\Json\Exception\RuntimeException $e)
 			{
-				$defined[implode('.', $pathParts) . '.' . $defKey->getId()] = true;
+				$this->getLogging()->error('Decoding failed ' . $filePath);
+				$decoded = null;
+			}
+			if (is_array($decoded))
+			{
+				foreach ($decoded as $key => $data)
+				{
+					$defined[strtolower($packageName . '.'  . $key)] = $filePath;
+				}
 			}
 		}
 
-
-		$implicitKeys = [];
 		foreach ($as->getModelManager()->getModelsNames() as $modelName)
 		{
 			$model = $as->getModelManager()->getModelByName($modelName);
-			$implicitKeys[strtolower(implode('.', ['m', $model->getVendorName(), $model->getShortModuleName(), 'documents', $model->getShortName()]))] = true;
-			foreach ($model->getPropertyNames() as $pName)
+			$usedExplicitely[strtolower($model->getLabelKey())] = true;
+			foreach ($model->getProperties() as $property)
 			{
-				$implicitKeys[strtolower(implode('.', ['m', $model->getVendorName(), $model->getShortModuleName(), 'documents', $model->getShortName(), $pName]))] = true;
+				$usedExplicitely[strtolower($property->getLabelKey())] = true;
 			}
 		}
+
 
 		if ($input->getOption('unused'))
 		{
 			foreach ($defined as $key => $val)
 			{
-				$parts = explode('.', $key);
-				$isDocLocale = ($parts[0] = 'm' && isset($parts['3']) && $parts['3'] === 'documents');
-				if (!$isDocLocale && !isset($usedExplicitely[$key]))
+				if (strpos($key, 'c.constraints') !== 0 && !isset($usedExplicitely[$key]))
 				{
 					$output->writeln('<comment>' . $key . '</comment>');
 				}
